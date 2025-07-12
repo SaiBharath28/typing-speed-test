@@ -12,16 +12,17 @@ const getRandomColor = () => {
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
+const getWords = (text) => text.trim().split(/\s+/);
+
 const App = () => {
   const [quote, setQuote] = useState("");
   const [userInput, setUserInput] = useState("");
   const [timer, setTimer] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
-  const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(() => {
-    return localStorage.getItem("highScore") || 0;
-  });
-  const [darkMode, setDarkMode] = useState(false);
+  const [wpm, setWpm] = useState(0);
+  const [accuracy, setAccuracy] = useState(100);
+  const [errors, setErrors] = useState(0);
+  const [highScore, setHighScore] = useState(() => localStorage.getItem("highScore") || 0);
   const [difficulty, setDifficulty] = useState(DIFFICULTY_LEVELS[0]);
   const [history, setHistory] = useState(() => {
     const data = localStorage.getItem("history");
@@ -29,7 +30,9 @@ const App = () => {
   });
   const [quoteColor, setQuoteColor] = useState(getRandomColor());
   const timerRef = useRef(null);
+  const inputRef = useRef(null);
 
+  // Fetch a new quote
   const fetchQuote = async () => {
     try {
       const res = await fetch("https://api.quotable.io/random");
@@ -38,7 +41,10 @@ const App = () => {
       setQuote(data.content);
       setUserInput("");
       setQuoteColor(getRandomColor());
-    } catch (error) {
+      setErrors(0);
+      setAccuracy(100);
+      setWpm(0);
+    } catch {
       const localQuotes = [
         "Practice makes perfect.",
         "Stay focused and keep typing.",
@@ -50,68 +56,114 @@ const App = () => {
       setQuote(localQuotes[random]);
       setUserInput("");
       setQuoteColor(getRandomColor());
+      setErrors(0);
+      setAccuracy(100);
+      setWpm(0);
     }
   };
 
+  // Start with a quote
   useEffect(() => {
     fetchQuote();
   }, []);
 
+  // Timer logic
   useEffect(() => {
     if (isRunning && timer > 0) {
       timerRef.current = setTimeout(() => setTimer(timer - 1), 1000);
     } else if (timer === 0 && isRunning) {
       setIsRunning(false);
-      const finalScore = Math.floor(userInput.trim().split(/\s+/).length);
-      setScore(finalScore);
-      if (finalScore > highScore) {
-        setHighScore(finalScore);
-        localStorage.setItem("highScore", finalScore);
-      }
-      const newHistory = [
-        ...history,
-        {
-          date: new Date().toLocaleString(),
-          score: finalScore,
-          difficulty: difficulty.label
-        }
-      ].slice(-5);
-      setHistory(newHistory);
-      localStorage.setItem("history", JSON.stringify(newHistory));
+      finalizeTest();
     }
     return () => clearTimeout(timerRef.current);
+    // eslint-disable-next-line
   }, [isRunning, timer]);
 
-  const handleInputChange = (e) => {
-    setUserInput(e.target.value);
-    if (!isRunning) {
-      setIsRunning(true);
-      setTimer(difficulty.time);
+  // Calculate WPM and accuracy live
+  useEffect(() => {
+    if (!isRunning) return;
+    const wordsTyped = userInput.trim().split(/\s+/).filter(Boolean).length;
+    const timeSpent = difficulty.time - timer;
+    const grossWpm = timeSpent > 0 ? Math.round((wordsTyped / timeSpent) * 60) : 0;
+    setWpm(grossWpm);
+
+    // Accuracy calculation
+    let correct = 0;
+    const compareLen = Math.min(userInput.length, quote.length);
+    for (let i = 0; i < compareLen; i++) {
+      if (userInput[i] === quote[i]) correct++;
     }
+    const acc = userInput.length === 0 ? 100 : Math.round((correct / userInput.length) * 100);
+    setAccuracy(acc);
+
+    // Error count
+    setErrors(userInput.length - correct);
+    // eslint-disable-next-line
+  }, [userInput, timer, isRunning]);
+
+  // On input change
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    if (!isRunning && timer === difficulty.time && val.length === 1) {
+      setIsRunning(true);
+    }
+    setUserInput(val);
   };
 
+  // Restart everything
   const handleRestart = () => {
-    fetchQuote();
-    setUserInput("");
     setTimer(difficulty.time);
     setIsRunning(false);
-    setScore(0);
+    setUserInput("");
+    setErrors(0);
+    setAccuracy(100);
+    setWpm(0);
+    fetchQuote();
+    inputRef.current && inputRef.current.focus();
   };
 
+  // Change difficulty
   const handleDifficultyChange = (level) => {
     setDifficulty(level);
     setTimer(level.time);
     setIsRunning(false);
-    setScore(0);
     setUserInput("");
+    setErrors(0);
+    setAccuracy(100);
+    setWpm(0);
     fetchQuote();
   };
 
+  // Finalize test and update high score/history
+  const finalizeTest = () => {
+    const wordsTyped = userInput.trim().split(/\s+/).filter(Boolean).length;
+    if (wordsTyped > highScore) {
+      setHighScore(wordsTyped);
+      localStorage.setItem("highScore", wordsTyped);
+    }
+    const newHistory = [
+      ...history,
+      {
+        date: new Date().toLocaleString(),
+        wpm: wpm,
+        accuracy: accuracy,
+        errors: errors,
+        difficulty: difficulty.label
+      }
+    ].slice(-5);
+    setHistory(newHistory);
+    localStorage.setItem("history", JSON.stringify(newHistory));
+  };
+
+  // Highlight quote
   const highlightText = () => {
-    return quote.split("").map((char, idx) => {
+    const chars = quote.split("");
+    return chars.map((char, idx) => {
       let className = "";
       if (userInput[idx]) {
         className = userInput[idx] === char ? "correct" : "incorrect";
+      } else if (idx === userInput.length) {
+        className = "current";
       }
       return (
         <span key={idx} className={className}>
@@ -122,11 +174,8 @@ const App = () => {
   };
 
   return (
-    <div className={`app ${darkMode ? "dark" : "light"}`}>
+    <div className={`app`}>
       <header>
-        <button onClick={() => setDarkMode(!darkMode)} className="toggle-btn">
-          {darkMode ? "🌞 Light Mode" : "🌙 Dark Mode"}
-        </button>
         <h1>
           <span className="logo">⌨️</span> Typing Speed Test
         </h1>
@@ -147,12 +196,15 @@ const App = () => {
         {highlightText()}
       </div>
       <textarea
+        ref={inputRef}
         value={userInput}
         onChange={handleInputChange}
         disabled={!isRunning && timer === 0}
         placeholder="Start typing here..."
         className="input-box"
         autoFocus
+        spellCheck={false}
+        maxLength={quote.length + 20}
       />
       <div className="progress-bar-container">
         <div
@@ -165,7 +217,9 @@ const App = () => {
       </div>
       <div className="stats">
         <p>⏳ <b>Time Left:</b> {timer}s</p>
-        <p>🏆 <b>Score:</b> {score} WPM</p>
+        <p>🏆 <b>WPM:</b> {wpm}</p>
+        <p>🎯 <b>Accuracy:</b> {accuracy}%</p>
+        <p>❌ <b>Errors:</b> {errors}</p>
         <p>🥇 <b>High Score:</b> {highScore} WPM</p>
       </div>
       <button onClick={handleRestart} className="restart-btn">
@@ -177,20 +231,24 @@ const App = () => {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Score</th>
+              <th>WPM</th>
+              <th>Accuracy</th>
+              <th>Errors</th>
               <th>Difficulty</th>
             </tr>
           </thead>
           <tbody>
             {history.length === 0 && (
               <tr>
-                <td colSpan="3">No history yet.</td>
+                <td colSpan="5">No history yet.</td>
               </tr>
             )}
             {history.map((item, idx) => (
               <tr key={idx}>
                 <td>{item.date}</td>
-                <td>{item.score} WPM</td>
+                <td>{item.wpm}</td>
+                <td>{item.accuracy}%</td>
+                <td>{item.errors}</td>
                 <td>{item.difficulty}</td>
               </tr>
             ))}
