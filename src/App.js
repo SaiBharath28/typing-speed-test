@@ -64,7 +64,7 @@ const App = () => {
   const timerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Load quote for selected difficulty
+  // Fetch quote for selected difficulty
   const loadQuote = async (level = difficulty) => {
     const newQuote = await fetchQuoteWithLength(level.minLen, level.maxLen);
     setQuote(newQuote);
@@ -91,6 +91,7 @@ const App = () => {
     } else if (timer === 0 && isRunning) {
       setIsRunning(false);
       finalizeTest();
+      setShowScore(true);
     }
     return () => clearTimeout(timerRef.current);
     // eslint-disable-next-line
@@ -242,14 +243,18 @@ const App = () => {
           </button>
         ))}
       </div>
-      <div className="quote-box" style={{ borderColor: quoteColor }}>
-        {highlightText()}
+      {/* Quote is ALWAYS visible */}
+      <div className="quote-box" style={{ borderColor: quoteColor, minHeight: "60px" }}>
+        {quote && highlightText()}
+        {!quote && <span style={{ color: "#888" }}>Loading...</span>}
       </div>
+      {/* Show Start button if not started and not on score screen */}
       {!isStarted && !showScore && (
         <button onClick={handleStart} className="restart-btn" style={{ marginBottom: "1rem" }}>
           ▶️ Start
         </button>
       )}
+      {/* Show textarea only when started */}
       {isStarted && (
         <textarea
           ref={inputRef}
