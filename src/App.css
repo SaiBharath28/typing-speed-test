@@ -68,6 +68,7 @@ h1 {
   letter-spacing: 0.5px;
   word-break: break-word;
   transition: border-color 0.3s;
+  user-select: none;
 }
 
 .correct {
@@ -78,6 +79,11 @@ h1 {
 .incorrect {
   color: #FF6584;
   text-decoration: underline;
+}
+
+.current {
+  background: #FFD86E;
+  border-radius: 2px;
 }
 
 .input-box {
@@ -116,11 +122,12 @@ h1 {
   font-size: 1.1rem;
   margin-bottom: 1.2rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-around;
   gap: 1rem;
 }
 
-.restart-btn, .toggle-btn {
+.restart-btn {
   font-size: 1rem;
   padding: 0.6rem 1.2rem;
   margin: 0.5rem;
@@ -134,21 +141,8 @@ h1 {
   transition: background 0.2s, color 0.2s;
 }
 
-.restart-btn:hover, .toggle-btn:hover {
+.restart-btn:hover {
   background: #43E97B;
-  color: #fff;
-}
-
-.toggle-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: #FFD86E;
-  color: #333;
-}
-
-.toggle-btn:hover {
-  background: #FF6584;
   color: #fff;
 }
 
@@ -193,75 +187,3 @@ footer {
   color: #888;
   font-size: 1rem;
 }
-
-/* Dark mode styles */
-.dark {
-  background: linear-gradient(135deg, #232526 0%, #414345 100%);
-  color: #f9f9ff;
-}
-
-.dark .app {
-  background: rgba(30,30,30,0.97);
-  box-shadow: 0 6px 32px rgba(0,0,0,0.18);
-}
-
-.dark .quote-box {
-  background: #2c2c2c;
-  border-color: #FFD86E;
-}
-
-.dark .input-box {
-  background: #232526;
-  color: #fff;
-  border-color: #FFD86E;
-}
-
-.dark .progress-bar-container {
-  background: #232526;
-}
-
-.dark .progress-bar {
-  background: #FFD86E !important;
-}
-
-.dark .history-table {
-  background: #232526;
-}
-
-.dark .history-table th {
-  background: #414345;
-  color: #FFD86E;
-}
-
-.dark .history-table td {
-  color: #fff;
-}
-
-.dark .stats {
-  color: #FFD86E;
-}
-
-.dark .restart-btn, .dark .toggle-btn {
-  background: #FFD86E;
-  color: #232526;
-}
-
-.dark .restart-btn:hover, .dark .toggle-btn:hover {
-  background: #43E97B;
-  color: #fff;
-}
-.correct {
-  color: #43E97B;
-  font-weight: bold;
-}
-
-.incorrect {
-  color: #FF6584;
-  text-decoration: underline;
-}
-
-.current {
-  background: #FFD86E;
-  border-radius: 2px;
-}
-
