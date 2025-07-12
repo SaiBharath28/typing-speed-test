@@ -2,9 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import "./App.css";
 
 const DIFFICULTY_LEVELS = [
-  { label: "Easy", time: 60 },
-  { label: "Medium", time: 45 },
-  { label: "Hard", time: 30 }
+  { label: "Easy", time: 60, minLen: 30, maxLen: 50 },
+  { label: "Medium", time: 60, minLen: 60, maxLen: 90 },
+  { label: "Hard", time: 60, minLen: 100, maxLen: 140 }
 ];
 
 const getRandomColor = () => {
@@ -12,7 +12,40 @@ const getRandomColor = () => {
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
-const getWords = (text) => text.trim().split(/\s+/);
+const fetchQuoteWithLength = async (minLen, maxLen) => {
+  // Try up to 5 times to get a quote in the right range
+  for (let i = 0; i < 5; i++) {
+    const res = await fetch("https://api.quotable.io/random");
+    if (!res.ok) continue;
+    const data = await res.json();
+    if (data.content.length >= minLen && data.content.length <= maxLen) {
+      return data.content;
+    }
+  }
+  // Fallback: use a local quote of approximate length
+  const localQuotes = [
+    "Practice makes perfect. Stay focused and keep typing.",
+    "Fast fingers, sharp mind. One keystroke at a time.",
+    "The quick brown fox jumps over the lazy dog.",
+    "Typing is a skill that improves with practice every day.",
+    "Accuracy is just as important as speed in typing tests.",
+    "Challenge yourself to type longer sentences without mistakes.",
+    "Consistent practice leads to remarkable improvement in typing speed and accuracy.",
+    "The art of typing is a blend of rhythm, focus, and precision.",
+    "With every session, you become a faster and more accurate typist."
+  ];
+  // Pick quote closest to desired length
+  let best = localQuotes[0];
+  let bestDiff = Math.abs(localQuotes[0].length - ((minLen + maxLen) / 2));
+  for (let q of localQuotes) {
+    let diff = Math.abs(q.length - ((minLen + maxLen) / 2));
+    if (diff < bestDiff) {
+      best = q;
+      bestDiff = diff;
+    }
+  }
+  return best;
+};
 
 const App = () => {
   const [quote, setQuote] = useState("");
@@ -32,39 +65,22 @@ const App = () => {
   const timerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Fetch a new quote
-  const fetchQuote = async () => {
-    try {
-      const res = await fetch("https://api.quotable.io/random");
-      if (!res.ok) throw new Error("Network response was not ok");
-      const data = await res.json();
-      setQuote(data.content);
-      setUserInput("");
-      setQuoteColor(getRandomColor());
-      setErrors(0);
-      setAccuracy(100);
-      setWpm(0);
-    } catch {
-      const localQuotes = [
-        "Practice makes perfect.",
-        "Stay focused and keep typing.",
-        "You can do it!",
-        "Fast fingers, sharp mind.",
-        "One keystroke at a time."
-      ];
-      const random = Math.floor(Math.random() * localQuotes.length);
-      setQuote(localQuotes[random]);
-      setUserInput("");
-      setQuoteColor(getRandomColor());
-      setErrors(0);
-      setAccuracy(100);
-      setWpm(0);
-    }
+  // Fetch a quote of the right length for the selected difficulty
+  const loadQuote = async (level = difficulty) => {
+    const newQuote = await fetchQuoteWithLength(level.minLen, level.maxLen);
+    setQuote(newQuote);
+    setUserInput("");
+    setQuoteColor(getRandomColor());
+    setErrors(0);
+    setAccuracy(100);
+    setWpm(0);
+    setTimer(level.time);
+    setIsRunning(false);
   };
 
-  // Start with a quote
   useEffect(() => {
-    fetchQuote();
+    loadQuote();
+    // eslint-disable-next-line
   }, []);
 
   // Timer logic
@@ -79,7 +95,7 @@ const App = () => {
     // eslint-disable-next-line
   }, [isRunning, timer]);
 
-  // Calculate WPM and accuracy live
+  // Live stats calculation
   useEffect(() => {
     if (!isRunning) return;
     const wordsTyped = userInput.trim().split(/\s+/).filter(Boolean).length;
@@ -101,58 +117,71 @@ const App = () => {
     // eslint-disable-next-line
   }, [userInput, timer, isRunning]);
 
-  // On input change
+  // Input change handler
   const handleInputChange = (e) => {
     const val = e.target.value;
+    // Start timer on first character
     if (!isRunning && timer === difficulty.time && val.length === 1) {
       setIsRunning(true);
     }
+    // Auto-stop if user completes the quote
+    if (val === quote) {
+      setUserInput(val);
+      setIsRunning(false);
+      finalizeTest(val);
+      return;
+    }
+    // Prevent typing beyond quote length + small buffer
+    if (val.length > quote.length + 10) return;
     setUserInput(val);
   };
 
   // Restart everything
   const handleRestart = () => {
-    setTimer(difficulty.time);
-    setIsRunning(false);
-    setUserInput("");
-    setErrors(0);
-    setAccuracy(100);
-    setWpm(0);
-    fetchQuote();
+    loadQuote();
     inputRef.current && inputRef.current.focus();
   };
 
-  // Change difficulty
+  // Change difficulty and reload quote
   const handleDifficultyChange = (level) => {
     setDifficulty(level);
-    setTimer(level.time);
-    setIsRunning(false);
-    setUserInput("");
-    setErrors(0);
-    setAccuracy(100);
-    setWpm(0);
-    fetchQuote();
+    loadQuote(level);
+    inputRef.current && inputRef.current.focus();
   };
 
   // Finalize test and update high score/history
-  const finalizeTest = () => {
-    const wordsTyped = userInput.trim().split(/\s+/).filter(Boolean).length;
-    if (wordsTyped > highScore) {
-      setHighScore(wordsTyped);
-      localStorage.setItem("highScore", wordsTyped);
+  const finalizeTest = (finalInput) => {
+    const input = finalInput !== undefined ? finalInput : userInput;
+    const wordsTyped = input.trim().split(/\s+/).filter(Boolean).length;
+    const timeSpent = difficulty.time - timer || 1;
+    const finalWpm = Math.round((wordsTyped / timeSpent) * 60);
+    let correct = 0;
+    const compareLen = Math.min(input.length, quote.length);
+    for (let i = 0; i < compareLen; i++) {
+      if (input[i] === quote[i]) correct++;
+    }
+    const acc = input.length === 0 ? 100 : Math.round((correct / input.length) * 100);
+    const errs = input.length - correct;
+
+    if (finalWpm > highScore) {
+      setHighScore(finalWpm);
+      localStorage.setItem("highScore", finalWpm);
     }
     const newHistory = [
       ...history,
       {
         date: new Date().toLocaleString(),
-        wpm: wpm,
-        accuracy: accuracy,
-        errors: errors,
+        wpm: finalWpm,
+        accuracy: acc,
+        errors: errs,
         difficulty: difficulty.label
       }
     ].slice(-5);
     setHistory(newHistory);
     localStorage.setItem("history", JSON.stringify(newHistory));
+    setWpm(finalWpm);
+    setAccuracy(acc);
+    setErrors(errs);
   };
 
   // Highlight quote
@@ -174,7 +203,7 @@ const App = () => {
   };
 
   return (
-    <div className={`app`}>
+    <div className="app">
       <header>
         <h1>
           <span className="logo">⌨️</span> Typing Speed Test
@@ -199,12 +228,12 @@ const App = () => {
         ref={inputRef}
         value={userInput}
         onChange={handleInputChange}
-        disabled={!isRunning && timer === 0}
+        disabled={!isRunning && (timer === 0 || userInput === quote)}
         placeholder="Start typing here..."
         className="input-box"
         autoFocus
         spellCheck={false}
-        maxLength={quote.length + 20}
+        maxLength={quote.length + 10}
       />
       <div className="progress-bar-container">
         <div
