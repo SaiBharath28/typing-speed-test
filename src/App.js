@@ -13,7 +13,6 @@ const getRandomColor = () => {
 };
 
 const fetchQuoteWithLength = async (minLen, maxLen) => {
-  // Try up to 5 times to get a quote in the right range
   for (let i = 0; i < 5; i++) {
     const res = await fetch("https://api.quotable.io/random");
     if (!res.ok) continue;
@@ -22,7 +21,6 @@ const fetchQuoteWithLength = async (minLen, maxLen) => {
       return data.content;
     }
   }
-  // Fallback: use a local quote of approximate length
   const localQuotes = [
     "Practice makes perfect. Stay focused and keep typing.",
     "Fast fingers, sharp mind. One keystroke at a time.",
@@ -34,7 +32,6 @@ const fetchQuoteWithLength = async (minLen, maxLen) => {
     "The art of typing is a blend of rhythm, focus, and precision.",
     "With every session, you become a faster and more accurate typist."
   ];
-  // Pick quote closest to desired length
   let best = localQuotes[0];
   let bestDiff = Math.abs(localQuotes[0].length - ((minLen + maxLen) / 2));
   for (let q of localQuotes) {
@@ -52,6 +49,8 @@ const App = () => {
   const [userInput, setUserInput] = useState("");
   const [timer, setTimer] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
+  const [showScore, setShowScore] = useState(false);
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [errors, setErrors] = useState(0);
@@ -65,7 +64,7 @@ const App = () => {
   const timerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Fetch a quote of the right length for the selected difficulty
+  // Load quote for selected difficulty
   const loadQuote = async (level = difficulty) => {
     const newQuote = await fetchQuoteWithLength(level.minLen, level.maxLen);
     setQuote(newQuote);
@@ -76,6 +75,8 @@ const App = () => {
     setWpm(0);
     setTimer(level.time);
     setIsRunning(false);
+    setIsStarted(false);
+    setShowScore(false);
   };
 
   useEffect(() => {
@@ -119,8 +120,8 @@ const App = () => {
 
   // Input change handler
   const handleInputChange = (e) => {
+    if (!isStarted) return;
     const val = e.target.value;
-    // Start timer on first character
     if (!isRunning && timer === difficulty.time && val.length === 1) {
       setIsRunning(true);
     }
@@ -129,15 +130,35 @@ const App = () => {
       setUserInput(val);
       setIsRunning(false);
       finalizeTest(val);
+      setShowScore(true);
       return;
     }
-    // Prevent typing beyond quote length + small buffer
+    // Prevent typing beyond quote length + buffer
     if (val.length > quote.length + 10) return;
     setUserInput(val);
   };
 
-  // Restart everything
+  // Start test
+  const handleStart = () => {
+    setIsStarted(true);
+    setUserInput("");
+    setTimer(difficulty.time);
+    setIsRunning(false);
+    setShowScore(false);
+    setErrors(0);
+    setAccuracy(100);
+    setWpm(0);
+    inputRef.current && inputRef.current.focus();
+  };
+
+  // Restart level
   const handleRestart = () => {
+    loadQuote();
+    inputRef.current && inputRef.current.focus();
+  };
+
+  // Next level or repeat
+  const handleNext = () => {
     loadQuote();
     inputRef.current && inputRef.current.focus();
   };
@@ -215,7 +236,7 @@ const App = () => {
             key={level.label}
             className={`difficulty-btn${level.label === difficulty.label ? " active" : ""}`}
             onClick={() => handleDifficultyChange(level)}
-            disabled={isRunning}
+            disabled={isRunning || isStarted}
           >
             {level.label}
           </button>
@@ -224,17 +245,24 @@ const App = () => {
       <div className="quote-box" style={{ borderColor: quoteColor }}>
         {highlightText()}
       </div>
-      <textarea
-        ref={inputRef}
-        value={userInput}
-        onChange={handleInputChange}
-        disabled={!isRunning && (timer === 0 || userInput === quote)}
-        placeholder="Start typing here..."
-        className="input-box"
-        autoFocus
-        spellCheck={false}
-        maxLength={quote.length + 10}
-      />
+      {!isStarted && !showScore && (
+        <button onClick={handleStart} className="restart-btn" style={{ marginBottom: "1rem" }}>
+          ▶️ Start
+        </button>
+      )}
+      {isStarted && (
+        <textarea
+          ref={inputRef}
+          value={userInput}
+          onChange={handleInputChange}
+          disabled={!isRunning && (timer === 0 || userInput === quote)}
+          placeholder="Start typing here..."
+          className="input-box"
+          autoFocus
+          spellCheck={false}
+          maxLength={quote.length + 10}
+        />
+      )}
       <div className="progress-bar-container">
         <div
           className="progress-bar"
@@ -251,9 +279,25 @@ const App = () => {
         <p>❌ <b>Errors:</b> {errors}</p>
         <p>🥇 <b>High Score:</b> {highScore} WPM</p>
       </div>
-      <button onClick={handleRestart} className="restart-btn">
-        🔁 Restart
-      </button>
+      {isStarted && (
+        <button onClick={handleRestart} className="restart-btn">
+          🔁 Restart
+        </button>
+      )}
+      {showScore && (
+        <div style={{ margin: "1.5rem 0" }}>
+          <h2>🎉 Test Complete!</h2>
+          <p><b>WPM:</b> {wpm}</p>
+          <p><b>Accuracy:</b> {accuracy}%</p>
+          <p><b>Errors:</b> {errors}</p>
+          <button onClick={handleNext} className="restart-btn" style={{ marginRight: 8 }}>
+            ▶️ Next Level
+          </button>
+          <button onClick={handleRestart} className="restart-btn">
+            🔁 Restart
+          </button>
+        </div>
+      )}
       <section className="history-section">
         <h2>Recent Results</h2>
         <table className="history-table">
