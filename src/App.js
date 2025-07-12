@@ -208,6 +208,10 @@ const App = () => {
 
   // Highlight quote
   const highlightText = () => {
+    if (!isStarted) {
+      // Show plain quote before test starts
+      return <span style={{ color: "#333" }}>{quote}</span>;
+    }
     const chars = quote.split("");
     return chars.map((char, idx) => {
       let className = "";
@@ -245,8 +249,7 @@ const App = () => {
       </div>
       {/* Quote is ALWAYS visible */}
       <div className="quote-box" style={{ borderColor: quoteColor, minHeight: "60px" }}>
-        {quote && highlightText()}
-        {!quote && <span style={{ color: "#888" }}>Loading...</span>}
+        {quote ? highlightText() : <span style={{ color: "#888" }}>Loading...</span>}
       </div>
       {/* Show Start button if not started and not on score screen */}
       {!isStarted && !showScore && (
